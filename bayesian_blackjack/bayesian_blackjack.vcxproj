@@ -96,6 +96,7 @@
   <ItemGroup>
     <ClCompile Include="jack.c" />
     <ClCompile Include="Makefile" />
+    <ClCompile Include="original.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="jack.h" />

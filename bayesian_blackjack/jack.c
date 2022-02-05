@@ -1,11 +1,13 @@
 #include "jack.h"
 
-uint8_t card_values[] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11}; // rank value of card from number representation
-uint8_t card_indices[] = { 0, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 }; // number representation of card from rank value
+/*
 
-typedef struct {
-	uint8_t* counts;
-} Deck;
+optimizations:
+	iterating through all possible cards can be improved by copying the original deck to the temp deck only once, then
+	reverting the changes made to the temp deck after each iteration
+
+
+*/
 
 // works
 void print_deck(Deck deck) {
@@ -81,6 +83,7 @@ double kelly(double win, double lose, double odds) {
 	return win + lose / odds;
 }
 
+// same with this, works but need to optimize heavily
 double dealer_win_probability(uint8_t player_hand[21], int player_cards, uint8_t dealer_hand[21], int dealer_cards, Deck deck, double* draw, double* lose) {
 	int player_hand_value = hand_value(player_hand, player_cards);
 	int dealer_hand_value = hand_value(dealer_hand, dealer_cards);
@@ -126,24 +129,24 @@ double dealer_win_probability(uint8_t player_hand[21], int player_cards, uint8_t
 	double next_win_prob;
 	double next_draw_prob;
 	double next_lose_prob;
-
 	double card_prob;
+	
 	uint8_t temp_dealer_hand[21];
+	memcpy(temp_dealer_hand, dealer_hand, dealer_cards);
 	int temp_dealer_hand_value;
+
 	int len_deck = deck_length(deck);
 	Deck temp_deck;
 	allocate_deck(&temp_deck);
-
+	copy_deck(deck, &temp_deck);
 
 	for (int i = 0; i < 10; i++) {
 		if (deck.counts[i] == 0) {
 			continue;
 		}
 
-		copy_deck(deck, &temp_deck);
 		temp_deck.counts[i]--;
 
-		memcpy(temp_dealer_hand, dealer_hand, dealer_cards);
 		temp_dealer_hand[dealer_cards] = i;
 		temp_dealer_hand_value = hand_value(temp_dealer_hand, dealer_cards + 1);
 
@@ -153,6 +156,7 @@ double dealer_win_probability(uint8_t player_hand[21], int player_cards, uint8_t
 
 		if (temp_dealer_hand_value > 21) {
 			lose_prob += card_prob;
+			temp_deck.counts[i]++;
 			continue;
 		}
 
@@ -161,6 +165,7 @@ double dealer_win_probability(uint8_t player_hand[21], int player_cards, uint8_t
 		win_prob += next_win_prob * card_prob;
 		draw_prob += next_draw_prob * card_prob;
 		lose_prob += next_lose_prob* card_prob;
+		temp_deck.counts[i]++;
 	}
 
 	*draw = draw_prob;
@@ -168,102 +173,7 @@ double dealer_win_probability(uint8_t player_hand[21], int player_cards, uint8_t
 	return win_prob;
 }
 
-double __dealer_win_probability(uint8_t player_hand[21], int player_cards, uint8_t dealer_hand[21], int dealer_cards, Deck deck, double* draw, double* lose, int recursion_depth) {
-	int player_hand_value = hand_value(player_hand, player_cards);
-	int dealer_hand_value = hand_value(dealer_hand, dealer_cards);
-
-	// printf("hand_values: %d, %d, recursion_depth: %d\n", player_hand_value, dealer_hand_value, recursion_depth);
-
-	if (player_hand_value == twenty_one) {
-		if (dealer_hand_value == twenty_one) {
-			*draw = 1.; // push
-			*lose = 0.;
-			return 0.;
-		}
-		*draw = 0.;
-		*lose = 1.; // dealer looses
-		return 0.;
-	}
-
-	if (player_hand_value > 21) {
-		*draw = 0.;
-		*lose = 0.;
-		return 1.; // dealer wins
-	}
-
-	if (dealer_hand_value == twenty_one) {
-		*draw = 0.;
-		*lose = 0.;
-		return 1.; // dealer wins
-	}
-
-	if (dealer_hand_value >= 17) {
-		if (dealer_hand_value > player_hand_value) {
-			*draw = 0.;
-			*lose = 0.;
-			return 1.;
-		}
-		else if (dealer_hand_value < player_hand_value) {
-			*draw = 0.;
-			*lose = 1.;
-			return 0.;
-		}
-		*draw = 1.;
-		*lose = 0.;
-		return 0.;
-	}
-
-	uint8_t temp_dealer_hand[21];
-	int temp_dealer_cards;
-	int temp_dealer_hand_value;
-
-	double dealer_win = 0.;
-	double dealer_draw = 0.;
-	double dealer_lose = 0.;
-
-	double temp_win, temp_draw, temp_lose, draw_card_prob;
-	int len_deck = deck_length(deck);
-
-	Deck temp_deck;
-	allocate_deck(&temp_deck);
-	for (int i = 0; i < 10; i++) {
-		// printf("index: %d\n", i);
-		if (deck.counts[i] == 0) {
-			continue;
-		}
-
-		memcpy(temp_dealer_hand, dealer_hand, dealer_cards);
-		temp_dealer_cards = dealer_cards;
-		temp_dealer_hand[temp_dealer_cards] = i;
-		temp_dealer_cards++;
-		temp_dealer_hand_value = hand_value(temp_dealer_hand, temp_dealer_cards);
-		
-		draw_card_prob = (float)deck.counts[i] / len_deck;
-		// printf("card probability: %.7f, card: %d, card counts: %d, len deck: %d\n", draw_card_prob, card_values[i], deck.counts[i], len_deck);
-
-		if (temp_dealer_hand_value > 21) {
-			// printf("bust\n");
-			dealer_lose += draw_card_prob;
-			continue;
-		}
-		copy_deck(deck, &temp_deck);
-		temp_deck.counts[i]--;
-
-		temp_win = __dealer_win_probability(player_hand, player_cards, temp_dealer_hand, temp_dealer_cards, temp_deck, &temp_draw, &temp_lose, recursion_depth + 1);
-
-		// printf("temp probabilities: %.7f, %.7f, %.7f\n", temp_win, temp_draw, temp_lose);
-
-		dealer_win += draw_card_prob * temp_win;
-		dealer_draw += draw_card_prob * temp_draw;
-		dealer_lose += draw_card_prob * temp_lose;
-	}
-
-	*draw = dealer_draw;
-	*lose = dealer_lose;
-	return dealer_win;
-
-}
-
+// pretty sure this works, just need to optimize the crap out of it
 double win_hand_probability(uint8_t player_hand[21], int player_cards, uint8_t dealer_hand[21], Deck deck, double* draw, double* lose) {
 	// probabilities if staying
 
@@ -284,11 +194,12 @@ double win_hand_probability(uint8_t player_hand[21], int player_cards, uint8_t d
 
 	int len_deck = deck_length(deck);
 	uint8_t temp_player_hand[21];
+	memcpy(temp_player_hand, player_hand, player_cards);
 	int temp_player_hand_value;
 
 	Deck temp_deck;
 	allocate_deck(&temp_deck);
-
+	copy_deck(deck, &temp_deck);
 	// iterate through all cards
 
 	for (int i = 0; i < 10; i++) {
@@ -296,10 +207,8 @@ double win_hand_probability(uint8_t player_hand[21], int player_cards, uint8_t d
 			continue;
 		}
 
-		copy_deck(deck, &temp_deck);
 		temp_deck.counts[i]--;
-
-		memcpy(temp_player_hand, player_hand, player_cards);
+		
 		temp_player_hand[player_cards] = i;
 		temp_player_hand_value = hand_value(temp_player_hand, player_cards + 1);
 		// printf("%d\n", temp_player_hand_value);
@@ -307,6 +216,7 @@ double win_hand_probability(uint8_t player_hand[21], int player_cards, uint8_t d
 
 		if (temp_player_hand_value > 21) {
 			player_hit_lose += card_prob;
+			temp_deck.counts[i]++;
 			continue;
 		}
 
@@ -315,6 +225,7 @@ double win_hand_probability(uint8_t player_hand[21], int player_cards, uint8_t d
 		player_hit_win += next_move_win * card_prob;
 		player_hit_draw += next_move_draw * card_prob;
 		player_hit_lose += next_move_lose * card_prob;
+		temp_deck.counts[i]++;
 	}
 
 	if (player_hit_win > dealer_lose) { // hit win rate > stay win rate
@@ -329,64 +240,7 @@ double win_hand_probability(uint8_t player_hand[21], int player_cards, uint8_t d
 
 }
 
-double __win_hand_probability(uint8_t player_hand[21], int player_cards, uint8_t dealer_hand[21], Deck deck, double* draw, double* lose) {
-	double player_win = 0;
-	double player_draw = 0;
-	double player_lose = 0;
-
-	double dealer_draw; // draw
-	double dealer_lose; // player win
-	double dealer_win = dealer_win_probability(player_hand, player_cards, dealer_hand, 2, deck, &dealer_draw, &dealer_lose); // dealer win, player lose
-
-	double hit_dealer_draw;
-	double hit_dealer_lose;
-	double hit_dealer_win;
-
-	uint8_t temp_player_hand[21];
-	memcpy(temp_player_hand, player_hand, player_cards);
-	int temp_player_cards = player_cards + 1;
-	int temp_player_hand_value;
-	double card_prob;
-	int len_deck = deck_length(deck);
-
-	Deck temp_deck;
-	allocate_deck(&temp_deck);
-
-	for (int i = 0; i < 10; i++) {
-		if (deck.counts[i] == 0) {
-			continue;
-		}
-		copy_deck(deck, &temp_deck);
-		temp_deck.counts[i]--;
-
-		card_prob = (float)deck.counts[i] / len_deck;
-
-		temp_player_hand[player_cards];
-		temp_player_hand_value = hand_value(temp_player_hand, temp_player_cards);
-		if (temp_player_hand_value > 21) {
-			player_lose += card_prob;
-			continue;
-		}
-		hit_dealer_win = dealer_win_probability(temp_player_hand, temp_player_cards, dealer_hand, 2, temp_deck, &hit_dealer_draw, &hit_dealer_lose);
-		player_win += hit_dealer_lose * card_prob;
-		player_draw += hit_dealer_draw * card_prob;
-		player_lose += hit_dealer_win * card_prob;
-	}
-
-	if (player_win >= dealer_lose) {
-		// printf("win: %.7f, draw: %.7f, lose: %.7f\n", player_win, player_draw, player_lose);
-
-		*draw = player_draw;
-		*lose = player_lose;
-		return player_win;
-	}
-	// printf("win: %.7f, draw: %.7f, lose: %.7f\n", dealer_lose, dealer_draw, lose_on_stay);
-
-	*draw = dealer_draw;
-	*lose = dealer_win;
-	return dealer_lose;
-}
-
+// probably need to optimize this, too
 double win_probability(Deck deck, double* draw, double* lose) {
 	double win_prob = 0;
 	double draw_prob = 0;
@@ -435,7 +289,7 @@ double win_probability(Deck deck, double* draw, double* lose) {
 			for (size_t k = 0; k < 10; k++) {
 				if (jlevel.counts[k] == 0)
 					continue;
-				printf("    k\n");
+
 				copy_deck(jlevel, &klevel);
 				klevel.counts[k]--;
 				player_hand[1] = k;
@@ -444,13 +298,12 @@ double win_probability(Deck deck, double* draw, double* lose) {
 				for (size_t l = 0; l < 10; l ++) {
 					if (klevel.counts[l] == 0)
 						continue;
-					printf("         l\n");
+
 					copy_deck(klevel, &llevel);
 					llevel.counts[l]--;
 					dealer_hand[1] = l;
 					len_llevel = deck_length(llevel);
-					print_hand(player_hand, 2);
-					print_hand(dealer_hand, 2);
+
 					/* the interesting stuff starts now */
 
 					// calculate the probability of this hand
@@ -471,7 +324,7 @@ double win_probability(Deck deck, double* draw, double* lose) {
 }
 
 int main() {
-	uint8_t counts[] = { 4, 4, 4, 4, 4, 4, 4, 4, 4, 4};
+	uint8_t counts[] = { 1, 4, 4, 4, 4, 4, 4, 3, 4, 4};
 
 	Deck deck;
 	deck.counts = counts;
@@ -481,11 +334,11 @@ int main() {
 	
 	double win, draw, lose;
 
-	win = win_hand_probability(player_hand, 2, dealer_hand, deck, &draw, &lose);
+	// win = win_hand_probability(player_hand, 2, dealer_hand, deck, &draw, &lose);
 
-	//win = dealer_win_probability(player_hand, 2, dealer_hand, 2, deck, &draw, &lose);
+	// win = dealer_win_probability(player_hand, 2, dealer_hand, 2, deck, &draw, &lose);
 
-	// win = win_probability(deck, &draw, &lose);
+	win = win_probability(deck, &draw, &lose);
 
 	printf("win: %.7f, draw: %.7f, lose: %.7f\n", win, draw, lose);
 
