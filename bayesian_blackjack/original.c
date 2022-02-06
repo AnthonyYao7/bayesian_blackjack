@@ -153,3 +153,174 @@ double __win_hand_probability(uint8_t player_hand[21], int player_cards, uint8_t
 	*lose = dealer_win;
 	return dealer_lose;
 }
+
+// here for safekeeping, expected result
+// win: 0.4503976, draw: 0.0711926, lose: 0.4784098
+double win_probability(Deck deck, double* draw, double* lose) {
+	double win_prob = 0;
+	double draw_prob = 0;
+	double lose_prob = 0;
+
+	int len_deck = deck_length(deck);
+
+	uint8_t player_hand[21];
+	uint8_t dealer_hand[21];
+	Deck ilevel;
+	Deck jlevel;
+	Deck klevel;
+	Deck llevel;
+	allocate_deck(&ilevel);
+	allocate_deck(&jlevel);
+	allocate_deck(&klevel);
+	allocate_deck(&llevel);
+	int len_ilevel;
+	int len_jlevel;
+	int len_klevel;
+	int len_llevel;
+	double hand_prob;
+	double hand_win_prob;
+	double hand_draw_prob;
+	double hand_lose_prob;
+
+	for (size_t i = 0; i < 10; i++) {
+		if (deck.counts[i] == 0) // ignore when there are none of those cards left
+			continue;
+
+		printf("i\n");
+		copy_deck(deck, &ilevel); // create copy of deck with the first card drawn as i, the iterator if it isn't zero
+		ilevel.counts[i]--; // decrement the amount of that card in the deck by one
+		player_hand[0] = i; // set the first card in the hand to that card, i
+		len_ilevel = deck_length(ilevel);
+
+		for (size_t j = 0; j < 10; j++) {
+			if (ilevel.counts[j] == 0)
+				continue;
+			printf("  j\n");
+			copy_deck(ilevel, &jlevel);
+			jlevel.counts[j]--;
+			dealer_hand[0] = j;
+			len_jlevel = deck_length(jlevel);
+
+			for (size_t k = 0; k < 10; k++) {
+				if (jlevel.counts[k] == 0)
+					continue;
+
+				copy_deck(jlevel, &klevel);
+				klevel.counts[k]--;
+				player_hand[1] = k;
+				len_klevel = deck_length(klevel);
+
+				for (size_t l = 0; l < 10; l++) {
+					if (klevel.counts[l] == 0)
+						continue;
+
+					copy_deck(klevel, &llevel);
+					llevel.counts[l]--;
+					dealer_hand[1] = l;
+					len_llevel = deck_length(llevel);
+
+					/* the interesting stuff starts now */
+
+					// calculate the probability of this hand
+					hand_prob = (double)(deck.counts[i] * ilevel.counts[j] * jlevel.counts[k] * klevel.counts[l]) / (len_deck * len_ilevel * len_jlevel * len_klevel);
+
+					hand_win_prob = win_hand_probability(player_hand, 2, dealer_hand, llevel, &hand_draw_prob, &hand_lose_prob);
+
+					win_prob += hand_win_prob * hand_prob;
+					draw_prob += hand_draw_prob * hand_prob;
+					lose_prob += hand_lose_prob * hand_prob;
+				}
+			}
+		}
+	}
+	*draw = draw_prob;
+	*lose = lose_prob;
+	return win_prob;
+}
+
+/*
+// probably need to optimize this, too
+double win_probability(Deck deck, double* draw, double* lose) {
+	double win_prob = 0;
+	double draw_prob = 0;
+	double lose_prob = 0;
+
+	int len_deck = deck_length(deck);
+
+	uint8_t player_hand[21];
+	uint8_t dealer_hand[21];
+
+	Deck temp_deck;
+	allocate_deck(&temp_deck);
+	copy_deck(deck, &temp_deck);
+
+	double hand_prob;
+	double hand_win_prob;
+	double hand_draw_prob;
+	double hand_lose_prob;
+
+	uint8_t ilevelcount;
+	uint8_t jlevelcount;
+	uint8_t klevelcount;
+	uint8_t llevelcount;
+
+	for (size_t i = 0; i < 10; i++) {
+		if (deck.counts[i] == 0) // ignore when there are none of those cards left
+			continue;
+
+		printf("i\n");
+		temp_deck.counts[i]--; // decrement the amount of that card in the deck by one
+		player_hand[0] = i; // set the first card in the hand to that card, i
+
+		for (size_t j = 0; j < 10; j++) {
+			if (temp_deck.counts[j] == 0)
+				continue;
+
+			printf("  j\n");
+			temp_deck.counts[j]--;
+			dealer_hand[0] = j;
+
+			for (size_t k = 0; k < 10; k++) {
+				if (temp_deck.counts[k] == 0)
+					continue;
+
+				temp_deck.counts[k]--;
+				player_hand[1] = k;
+
+				for (size_t l = 0; l < 10; l ++) {
+					if (temp_deck.counts[l] == 0)
+						continue;
+
+					dealer_hand[1] = l;
+
+					// the interesting stuff starts now
+
+					// calculate the probability of this hand
+					llevelcount = temp_deck.counts[l]; // number of cards l left in the deck when picking cards for this loop
+					temp_deck.counts[k]++;
+					klevelcount = temp_deck.counts[k];
+					temp_deck.counts[j]++;
+					jlevelcount = temp_deck.counts[j];
+					temp_deck.counts[i]++;
+					ilevelcount = temp_deck.counts[i];
+
+					hand_prob = (double)(ilevelcount * jlevelcount * klevelcount * llevelcount) / (len_deck * (len_deck - 1) * (len_deck - 2) * (len_deck - 3));
+
+					temp_deck.counts[i]--;
+					temp_deck.counts[j]--;
+					temp_deck.counts[k]--;
+
+					hand_win_prob = win_hand_probability(player_hand, 2, dealer_hand, temp_deck, &hand_draw_prob, &hand_lose_prob);
+
+					win_prob += hand_win_prob * hand_prob;
+					draw_prob += hand_draw_prob * hand_prob;
+					lose_prob += hand_lose_prob * hand_prob;
+				}
+			}
+		}
+	}
+	*draw = draw_prob;
+	*lose = lose_prob;
+	return win_prob;
+}
+*/

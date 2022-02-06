@@ -30,6 +30,11 @@ void allocate_deck(Deck* deck) {
 		printf("failed");
 }
 
+void deallocate_deck(Deck* deck) {
+	free(deck->counts);
+	deck->counts = NULL;
+}
+
 // works
 void copy_deck(Deck deck, Deck* copy) {
 	memcpy(copy->counts, deck.counts, sizeof(uint8_t) * 10);
@@ -168,6 +173,7 @@ double dealer_win_probability(uint8_t player_hand[21], int player_cards, uint8_t
 		temp_deck.counts[i]++;
 	}
 
+	deallocate_deck(&temp_deck);
 	*draw = draw_prob;
 	*lose = lose_prob;
 	return win_prob;
@@ -234,13 +240,12 @@ double win_hand_probability(uint8_t player_hand[21], int player_cards, uint8_t d
 		return player_hit_win;
 	}
 
+	deallocate_deck(&temp_deck);
 	*draw = dealer_draw;
 	*lose = dealer_win;
 	return dealer_lose;
-
 }
 
-// probably need to optimize this, too
 double win_probability(Deck deck, double* draw, double* lose) {
 	double win_prob = 0;
 	double draw_prob = 0;
@@ -270,7 +275,7 @@ double win_probability(Deck deck, double* draw, double* lose) {
 	for (size_t i = 0; i < 10; i++) {
 		if (deck.counts[i] == 0) // ignore when there are none of those cards left
 			continue;
-		
+
 		printf("i\n");
 		copy_deck(deck, &ilevel); // create copy of deck with the first card drawn as i, the iterator if it isn't zero
 		ilevel.counts[i]--; // decrement the amount of that card in the deck by one
@@ -295,7 +300,7 @@ double win_probability(Deck deck, double* draw, double* lose) {
 				player_hand[1] = k;
 				len_klevel = deck_length(klevel);
 
-				for (size_t l = 0; l < 10; l ++) {
+				for (size_t l = 0; l < 10; l++) {
 					if (klevel.counts[l] == 0)
 						continue;
 
@@ -308,7 +313,7 @@ double win_probability(Deck deck, double* draw, double* lose) {
 
 					// calculate the probability of this hand
 					hand_prob = (double)(deck.counts[i] * ilevel.counts[j] * jlevel.counts[k] * klevel.counts[l]) / (len_deck * len_ilevel * len_jlevel * len_klevel);
-					
+
 					hand_win_prob = win_hand_probability(player_hand, 2, dealer_hand, llevel, &hand_draw_prob, &hand_lose_prob);
 
 					win_prob += hand_win_prob * hand_prob;
@@ -318,13 +323,18 @@ double win_probability(Deck deck, double* draw, double* lose) {
 			}
 		}
 	}
+	deallocate_deck(&ilevel);
+	deallocate_deck(&jlevel);
+	deallocate_deck(&klevel);
+	deallocate_deck(&llevel);
+
 	*draw = draw_prob;
 	*lose = lose_prob;
 	return win_prob;
 }
 
 int main() {
-	uint8_t counts[] = { 1, 4, 4, 4, 4, 4, 4, 3, 4, 4};
+	uint8_t counts[] = { 4, 4, 4, 4, 4, 4, 4, 4, 4, 4};
 
 	Deck deck;
 	deck.counts = counts;
